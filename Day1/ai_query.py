@@ -8,4 +8,4 @@ response = ollama.chat(
         }
     ]
 )
-print(response[messages"][content])
+print(response["messages"]["content"])
