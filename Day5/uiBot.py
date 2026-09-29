@@ -13,12 +13,12 @@ with st.sidebar:
      uploaded_file = st.file_uploader("upload a text file..")
      try:
          if uploaded_file:
-              st.success("success")
+              st.success("file is success")
               if st.button("Display"):
                   context = uploaded_file.read().decode("utf-8")
                   st.text(context)
      except:
-          st.error("sorry this dile is not supported")
+          st.error("sorry this file not supported")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
