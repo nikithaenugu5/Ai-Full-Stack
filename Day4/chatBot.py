@@ -17,4 +17,5 @@ while True:
         {"role":"assistant",
          "content": response["message"]["content"]}
     )
-print("AI:", response["message"]["content"]) 
+    print("AI:", response["message"]["content"]) 
+

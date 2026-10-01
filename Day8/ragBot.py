@@ -1,0 +1,108 @@
+from sentence_transformers import SentenceTransformer
+import chromadb,ollama,streamlit as st
+
+@st.cache_resource
+def load_model():
+    return SentenceTransformer("all-MiniLM-L6-v2")
+model = load_model()
+st.title("My RagBot")
+with st.sidebar:
+    st.header(":blue[Chat settings]")
+    if st.button("Chat histroy"):
+         for msg in st.session_state.messages:
+              with st.chat_message(msg["role"]):
+                   st.write(msg["content"])
+    if st.button("Clear chat "):
+        st.session_state.msgs = []
+        st.success("Chat cleared 🗑️")
+    personalities = {
+        "Kid👶": " Answer the question like you are explaing to a 5 yeas old kid.Give the answer in 2 line only",
+        "Friend 👩‍🦱" :"Answer the question in a friendly way and casual manner. Give the answer in 2 lines only",
+        "Father 🧓" : " Answer the question as a father is talling to the daugther.Give in 2 lines only"
+        }
+    personality= st.selectbox("Select a personality",personalities.keys())
+    uploaded_file = st.file_uploader("Upload a file")
+    if uploaded_file:
+        text = uploaded_file.read().decode("utf-8")
+        with st.expander("Preview"):
+            st.text(text)
+        chunks = []
+        chunk_size = 100
+        chunk_overlap = 20
+        step = chunk_size - chunk_overlap
+        for i in range(0,len(text),chunk_overlap):
+            chunk = text[i:i+chunk_size]
+            chunks.append(chunk)
+        embeddings = model.encode(chunks)
+        client = chromadb.PersistentClient(path = "./chroma_db")
+        collection = client.get_or_create_collection(name= "My_documents")
+        ids = []
+        for i in range(len(chunks)):
+            ids.append(f"{uploaded_file.name}_{i}")
+        collection .add(
+            ids = ids,
+            documents = chunks,
+            embeddings =embeddings.tolist() 
+            )
+# Query phase
+question = st.chat_input("Ask a question....")
+if question:
+    if uploaded_file:
+        with st.chat_message("user"):
+            st.write(question)
+        question_embedding = model.encode(question)
+        results = collection.query(
+            query_embeddings = [question_embedding.tolist()],
+            n_results=3
+        )
+        # print(results)
+        retrived_results = results['documents'][0]
+        retrived_ids = results['ids'][0]
+        # print(retrived_results)
+        # for i in range(len(results['documents'][0])):
+        #     print(f"Chunk_{i}\n")
+        #     print(results['documents'][0][i])
+        # prompting
+        context = '\n'.join(retrived_results)
+        # print(retrived_results)
+        # print(context)
+        prompt = f'''
+        Answer the question using the context provided below.
+        Queestion : {question}
+        Context : {context}
+        Answer : '''
+        # print(prompt)
+        # connecting to local model
+        response = ollama.chat(
+            model="llama3.2:3b",
+            messages=[{
+                "role" : "user",
+                "content" : prompt
+            }]
+        )
+        with st.chat_message("assistant"):
+            st.write(response["message"]["content"])
+    else:
+        st.session_state.messages.append(
+             {
+                  "role":"user",
+                  "content": question
+             }
+        )
+        with st.chat_message("user"):
+                st.write(question)
+        with st.spinner("Thinking..."):
+            response = ollama.chat(
+                model="llama3.2:3b",
+                messages= [
+                    {"role": "system",
+                     "content": personalities[personality]}]
+                    + st.session_state.msgs
+                )
+        answer = response["message"]["content"]
+        st.session_state.msgs.append({
+            "role": "assistant",
+            "content": answer
+            })
+        with st.chat_message("assistant"):
+                st.write(answer)
